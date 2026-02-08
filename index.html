@@ -132,6 +132,7 @@
                                 </div>
                             </div>
 
+
                             {/* グラフィックパネル */}
                             <div className="lg:col-span-2 space-y-6">
                                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
@@ -157,4 +158,36 @@
                                     <div className="relative w-full aspect-[21/7] bg-slate-50 rounded-xl overflow-hidden border border-slate-100">
                                         <svg viewBox="0 0 400 120" className="w-full h-full">
                                             <line x1="0" y1="100" x2="400" y2="100" stroke="#cbd5e1" strokeWidth="1" />
-                                            <line x1="0" y1={100 - (z * 3)} x2="400" y2={100 - (z * 3)} stroke="#94a3b8" strokeDasharray="2
+                                            <line x1="0" y1={100 - (z * 3)} x2="400" y2={100 - (z * 3)} stroke="#94a3b8" strokeDasharray="2 2" />
+                                            <rect x="40" y={100 - (h * 3)} width="20" height={h * 3} fill="#334155" rx="1" />
+                                            <line x1={40 + (d * 3)} y1="0" x2={40 + (d * 3)} y2="120" stroke="#fb7185" strokeWidth="1.5" strokeDasharray="4 2" />
+                                            {[10, 12, 14].map(time => {
+                                                const alt = calculateSunAlt(time);
+                                                const shadowL = (h - z) / Math.tan(alt);
+                                                return (
+                                                    <line key={time} x1="50" y1={100 - (h * 3)} x2={50 + (shadowL * 3)} y2={100 - (z * 3)} 
+                                                          stroke="#f59e0b" strokeOpacity="0.3" strokeWidth="1" />
+                                                );
+                                            })}
+                                        </svg>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // レンダリング実行
+        try {
+            const root = ReactDOM.createRoot(document.getElementById('root'));
+            root.render(<ShadowSimulator />);
+        } catch (err) {
+            console.error("Render Error:", err);
+            document.getElementById('root').innerHTML = "エラーが発生しました: " + err.message;
+        }
+    </script>
+</body>
+</html>
