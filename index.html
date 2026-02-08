@@ -11,30 +11,24 @@
     <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
     <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
     <style>
-        body { background-color: #f3f4f6; font-family: 'sans-serif'; }
-        input[type=range] { height: 2rem; width: 100%; cursor: pointer; }
+        body { background-color: #f8fafc; font-family: sans-serif; }
+        input[type=range] { height: 1.5rem; width: 100%; cursor: pointer; accent-color: #2563eb; }
     </style>
 </head>
 <body>
-    <div id="root">読み込み中...</div>
+    <div id="root"></div>
 
     <script type="text/babel">
         const { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceDot } = window.Recharts;
-        const { useState, useMemo, useEffect } = React;
+        const { useState, useMemo } = React;
 
         const ShadowSimulator = () => {
-            // 入力用の一時ステート
-            const [inputH, setInputH] = useState(14);
-            const [inputZ, setInputZ] = useState(6.5);
-            const [inputD, setInputD] = useState(10);
-            const [inputLimit, setInputLimit] = useState(3);
+            const [h, setH] = useState(14.0);
+            const [z, setZ] = useState(6.5);
+            const [d, setD] = useState(10.0);
+            const [limitHours, setLimitHours] = useState(3.0);
+            const lat = 35.7;
 
-            // 計算結果に反映されるステート（「実行」ボタンで更新）
-            const [params, setParams] = useState({ h: 14, z: 6.5, d: 10, limit: 3 });
-
-            const lat = 35.7; // 東京
-
-            // 太陽高度計算
             const calculateSunAlt = (hour) => {
                 const delta = -23.44 * Math.PI / 180;
                 const phi = lat * Math.PI / 180;
@@ -43,159 +37,169 @@
                 return Math.asin(sin_h);
             };
 
-            // 日影時間計算関数
-            const getShadowDuration = (h, d, z) => {
-                const deltaH = h - z;
+            const getShadowDuration = (targetH, targetD, targetZ) => {
+                const deltaH = targetH - targetZ;
                 if (deltaH <= 0) return 0;
                 let duration = 0;
-                for (let t = 8; t <= 16; t += 0.1) {
+                for (let t = 8; t <= 16; t += 0.05) { // 精度を上げるため5分刻みで計算
                     const alt = calculateSunAlt(t);
-                    if (alt > 0 && (deltaH / Math.tan(alt)) > d) duration += 0.1;
+                    if (alt > 0 && (deltaH / Math.tan(alt)) > targetD) duration += 0.05;
                 }
                 return duration;
             };
 
-            // 実行ボタンクリック時の処理
-            const handleExecute = () => {
-                setParams({ h: inputH, z: inputZ, d: inputD, limit: inputLimit });
-            };
-
-            // グラフデータ（paramsに連動）
+            // 10cm刻み(0.1m)で計算し曲線で描画
             const chartData = useMemo(() => {
                 const data = [];
                 for (let dist = 1; dist <= 30; dist += 1) {
-                    let maxHeight = params.z;
-                    for (let testH = params.z; testH <= 40; testH += 0.5) {
-                        if (getShadowDuration(testH, dist, params.z) <= params.limit) {
+                    let maxHeight = z;
+                    for (let testH = z; testH <= 45; testH += 0.1) {
+                        if (getShadowDuration(testH, dist, z) <= limitHours) {
                             maxHeight = testH;
                         } else { break; }
                     }
-                    data.push({ 距離: dist, 限界高さ: parseFloat(maxHeight.toFixed(1)) });
+                    data.push({ 距離: dist, 限界高さ: parseFloat(maxHeight.toFixed(2)) });
                 }
                 return data;
-            }, [params.z, params.limit]);
+            }, [z, limitHours]);
 
-            const currentDuration = getShadowDuration(params.h, params.d, params.z);
-            const isOk = currentDuration <= params.limit;
+            const currentDuration = getShadowDuration(h, d, z);
+            const isOk = currentDuration <= limitHours;
 
             return (
-                <div className="min-h-screen p-4 md:p-8 flex justify-center">
-                    <div className="w-full max-w-4xl space-y-6">
+                <div className="min-h-screen p-4 md:p-8 flex justify-center text-slate-800">
+                    <div className="w-full max-w-5xl space-y-6">
                         
-                        <header className="bg-blue-900 text-white p-6 rounded-2xl shadow-xl border-b-4 border-blue-700">
-                            <h1 className="text-2xl font-bold flex items-center gap-2">
-                                🏠 日影時間・建物高さシミュレーター
-                            </h1>
-                            <p className="text-sm opacity-80 mt-1">冬至（12月22日）/ 東京（北緯35.7°）基準</p>
+                        <header className="bg-slate-900 text-white p-6 rounded-2xl shadow-lg border-l-8 border-blue-500">
+                            <h1 className="text-2xl font-bold tracking-tight">日影制限シミュレーター</h1>
+                            <p className="text-sm opacity-70 mt-1 font-mono">Winter Solstice / Tokyo (35.7°N)</p>
                         </header>
 
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             
-                            {/* 設定エリア */}
+                            {/* 操作パネル */}
                             <div className="lg:col-span-1 space-y-4">
-                                <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-200">
-                                    <h2 className="font-bold text-slate-800 mb-4 border-b pb-2 tracking-wider text-sm">条件設定</h2>
+                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                                    <h2 className="font-bold mb-6 text-sm uppercase tracking-widest text-slate-500 border-b pb-2">条件設定</h2>
                                     
-                                    <div className="space-y-5">
+                                    <div className="space-y-6 text-sm">
                                         <div>
-                                            <div className="flex justify-between text-sm mb-1">
-                                                <span className="font-medium text-slate-600">建物高さ (H)</span>
-                                                <span className="font-bold text-blue-600">{inputH}m</span>
+                                            <div className="flex justify-between mb-2">
+                                                <span className="font-bold">建物高さ (H)</span>
+                                                <span className="text-blue-600 font-black">{h.toFixed(1)}m</span>
                                             </div>
-                                            <input type="range" min="1" max="40" step="0.5" value={inputH} onChange={(e)=>setInputH(Number(e.target.value))} />
+                                            <input type="range" min="1" max="40" step="0.1" value={h} onChange={(e)=>setH(Number(e.target.value))} />
                                         </div>
 
                                         <div>
-                                            <div className="flex justify-between text-sm mb-1">
-                                                <span className="font-medium text-slate-600">判定面の高さ (Z)</span>
-                                                <span className="font-bold text-blue-600">{inputZ}m</span>
+                                            <div className="flex justify-between mb-2">
+                                                <span className="font-bold">判定面の高さ (Z)</span>
+                                                <span className="text-blue-600 font-black">{z.toFixed(1)}m</span>
                                             </div>
-                                            <input type="range" min="0" max="10" step="0.5" value={inputZ} onChange={(e)=>setInputZ(Number(e.target.value))} />
+                                            <input type="range" min="0" max="15" step="0.1" value={z} onChange={(e)=>setZ(Number(e.target.value))} />
                                         </div>
 
                                         <div>
-                                            <div className="flex justify-between text-sm mb-1">
-                                                <span className="font-medium text-slate-600">境界からの距離 (D)</span>
-                                                <span className="font-bold text-blue-600">{inputD}m</span>
+                                            <div className="flex justify-between mb-2">
+                                                <span className="font-bold">境界からの距離 (D)</span>
+                                                <span className="text-blue-600 font-black">{d.toFixed(1)}m</span>
                                             </div>
-                                            <input type="range" min="1" max="30" step="0.5" value={inputD} onChange={(e)=>setInputD(Number(e.target.value))} />
+                                            <input type="range" min="1" max="30" step="0.1" value={d} onChange={(e)=>setD(Number(e.target.value))} />
                                         </div>
 
                                         <div>
-                                            <span className="text-sm font-medium text-slate-600 block mb-2">規制時間</span>
-                                            <div className="grid grid-cols-3 gap-2">
-                                                {[3, 4, 5].map(v => (
-                                                    <button key={v} onClick={()=>setInputLimit(v)} className={`py-2 rounded-lg text-sm font-bold border ${inputLimit === v ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200'}`}>{v}時間</button>
-                                                ))}
+                                            <div className="flex justify-between mb-2">
+                                                <span className="font-bold">規制時間 (制限)</span>
+                                                <span className="text-orange-600 font-black">{limitHours.toFixed(1)}時間</span>
+                                            </div>
+                                            <input type="range" min="2" max="5" step="0.5" value={limitHours} onChange={(e)=>setLimitHours(Number(e.target.value))} />
+                                            <div className="flex justify-between text-[10px] text-slate-400 mt-1 px-1">
+                                                <span>2.0h</span><span>3.0h</span><span>4.0h</span><span>5.0h</span>
                                             </div>
                                         </div>
-
-                                        <button onClick={handleExecute} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 rounded-xl shadow-lg transition-transform active:scale-95 text-lg mt-4 flex items-center justify-center gap-2">
-                                            ▶ 計算を実行する
-                                        </button>
                                     </div>
                                 </div>
 
-                                <div className={`p-6 rounded-2xl text-center shadow-lg border-b-4 ${isOk ? 'bg-emerald-500 border-emerald-700' : 'bg-red-500 border-red-700'} text-white`}>
-                                    <div className="text-sm font-bold opacity-90 mb-1">判定結果</div>
-                                    <div className="text-4xl font-black mb-2">{isOk ? "適合 (OK)" : "不適合 (NG)"}</div>
-                                    <div className="text-sm bg-black/10 py-1 rounded-full text-white/90 font-mono">
-                                        日影時間: {currentDuration.toFixed(1)}h / {params.limit}h
+                                <div className={`p-6 rounded-2xl shadow-inner text-center border-t-4 ${isOk ? 'bg-blue-50 border-blue-500' : 'bg-red-50 border-red-500'}`}>
+                                    <div className="text-xs font-bold text-slate-500 uppercase">Judgment</div>
+                                    <div className={`text-4xl font-black my-1 ${isOk ? 'text-blue-600' : 'text-red-600'}`}>
+                                        {isOk ? "適合" : "不適合"}
+                                    </div>
+                                    <div className="text-sm font-bold text-slate-600">
+                                        日影時間: {currentDuration.toFixed(1)} / {limitHours.toFixed(1)}h
                                     </div>
                                 </div>
                             </div>
 
-                            {/* グラフ・図解エリア */}
+                            {/* グラフィックエリア */}
                             <div className="lg:col-span-2 space-y-6">
-                                <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-200">
-                                    <h3 className="text-sm font-bold text-slate-700 mb-4 tracking-wider flex items-center gap-2">
-                                        📈 建物高さ × 境界距離 の限界線（OK範囲）
+                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                                    <h3 className="text-sm font-bold text-slate-700 mb-6 flex items-center">
+                                        <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                                        建物高さ × 境界距離 限界曲線 (10cm刻み計算)
                                     </h3>
                                     <div className="h-[300px] w-full">
-                                        <ResponsiveContainer width="100%" height="100%">
+                                        <ResponsiveContainer>
                                             <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 20 }}>
-                                                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                                                <XAxis dataKey="距離" label={{ value: '境界距離 (m)', position: 'insideBottom', offset: -10, fontSize: 12 }} tick={{fontSize: 11}} />
-                                                <YAxis domain={[0, 45]} label={{ value: '高さ (m)', angle: -90, position: 'insideLeft', fontSize: 12 }} tick={{fontSize: 11}} />
+                                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                                                <XAxis dataKey="距離" label={{ value: '距離 (m)', position: 'insideBottom', offset: -10, fontSize: 11 }} />
+                                                <YAxis domain={[0, 45]} label={{ value: '高さ (m)', angle: -90, position: 'insideLeft', fontSize: 11 }} />
                                                 <Tooltip />
-                                                <Area type="monotone" dataKey="限界高さ" stroke="#3b82f6" strokeWidth={3} fill="#dbeafe" name="建築可能な高さ" />
-                                                <ReferenceDot x={params.d} y={params.h} r={8} fill={isOk ? "#10b981" : "#ef4444"} stroke="#fff" strokeWidth={3} />
+                                                <Area type="monotone" dataKey="限界高さ" stroke="#2563eb" strokeWidth={3} fill="#dbeafe" />
+                                                <ReferenceDot x={d} y={h} r={8} fill={isOk ? "#2563eb" : "#ef4444"} stroke="#fff" strokeWidth={3} />
                                             </AreaChart>
                                         </ResponsiveContainer>
                                     </div>
-                                    <p className="text-[11px] text-slate-400 mt-6 text-center leading-relaxed">
-                                        青いエリア：指定した規制時間を守れる高さの範囲<br/>
-                                        ●：現在の設定値（緑＝適合 / 赤＝不適合）
-                                    </p>
                                 </div>
 
-                                <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-200">
-                                    <h3 className="text-sm font-bold text-slate-700 mb-4 tracking-wider">📐 断面イメージ</h3>
-                                    <div className="relative w-full aspect-[21/8] bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
-                                        <svg viewBox="0 0 400 120" className="w-full h-full">
-                                            <line x1="0" y1="100" x2="400" y2="100" stroke="#94a3b8" strokeWidth="1" />
-                                            <line x1="0" y1={100 - (params.z * 2.5)} x2="400" y2={100 - (params.z * 2.5)} stroke="#cbd5e1" strokeDasharray="2 2" />
-                                            <text x="5" y={95 - (params.z * 2.5)} fontSize="8" fill="#94a3b8">判定面 (Z={params.z}m)</text>
+                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                                    <h3 className="text-sm font-bold text-slate-700 mb-4">📐 断面図 (単位:m)</h3>
+                                    <div className="relative w-full aspect-[21/9] bg-slate-50 rounded-xl border border-slate-100 p-4">
+                                        <svg viewBox="0 -10 400 130" className="w-full h-full overflow-visible">
+                                            {/* 目盛り: 高さ(Y軸) */}
+                                            {[0, 10, 20, 30, 40].map(val => (
+                                                <g key={val}>
+                                                    <line x1="25" y1={100 - (val * 2.5)} x2="30" y2={100 - (val * 2.5)} stroke="#cbd5e1" />
+                                                    <text x="5" y={103 - (val * 2.5)} fontSize="8" fill="#94a3b8">{val}m</text>
+                                                </g>
+                                            ))}
                                             
-                                            <rect x="40" y={100 - (params.h * 2.5)} width="25" height={params.h * 2.5} fill="#334155" />
-                                            <text x="35" y={90 - (params.h * 2.5)} fontSize="9" fontWeight="bold" fill="#334155">建物 (H={params.h}m)</text>
-                                            
-                                            <line x1={40 + (params.d * 2.5)} y1="0" x2={40 + (params.d * 2.5)} y2="120" stroke="#ef4444" strokeWidth="2" strokeDasharray="4 2" />
-                                            <text x={45 + (params.d * 2.5)} y="15" fontSize="9" fill="#ef4444" fontWeight="bold">境界線 (D={params.d}m)</text>
+                                            {/* 目盛り: 距離(X軸) */}
+                                            {[0, 10, 20, 30, 40].map(val => (
+                                                <g key={val}>
+                                                    <line x1={30 + (val * 8)} y1="100" x2={30 + (val * 8)} y2="105" stroke="#cbd5e1" />
+                                                    <text x={25 + (val * 8)} y="115" fontSize="8" fill="#94a3b8">{val}m</text>
+                                                </g>
+                                            ))}
 
+                                            {/* 地面 */}
+                                            <line x1="30" y1="100" x2="400" y2="100" stroke="#64748b" strokeWidth="2" />
+                                            
+                                            {/* 判定面 */}
+                                            <line x1="30" y1={100 - (z * 2.5)} x2="400" y2={100 - (z * 2.5)} stroke="#94a3b8" strokeDasharray="3 2" />
+                                            <text x="350" y={95 - (z * 2.5)} fontSize="8" fill="#94a3b8">Z={z}m</text>
+                                            
+                                            {/* 建物 */}
+                                            <rect x="30" y={100 - (h * 2.5)} width="20" height={h * 2.5} fill="#1e293b" />
+                                            <text x="30" y={90 - (h * 2.5)} fontSize="9" fontWeight="bold" fill="#1e293b">H={h}m</text>
+                                            
+                                            {/* 境界線 */}
+                                            <line x1={30 + (d * 8)} y1="0" x2={30 + (d * 8)} y2="100" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="4 2" />
+                                            <text x={35 + (d * 8)} y="10" fontSize="9" fill="#ef4444" fontWeight="bold">D={d}m</text>
+
+                                            {/* 太陽光線 */}
                                             {[9, 12, 15].map(t => {
                                                 const alt = calculateSunAlt(t);
-                                                const shadowL = (params.h - params.z) / Math.tan(alt);
+                                                const shadowL = (h - z) / Math.tan(alt);
                                                 return (
-                                                    <line key={t} x1="52" y1={100 - (params.h * 2.5)} x2={52 + (shadowL * 2.5)} y2={100 - (params.z * 2.5)} 
-                                                          stroke="#f59e0b" strokeOpacity="0.4" strokeWidth="1" />
+                                                    <line key={t} x1="40" y1={100 - (h * 2.5)} x2={40 + (shadowL * 8)} y2={100 - (z * 2.5)} 
+                                                          stroke="#f59e0b" strokeOpacity="0.3" strokeWidth="1" />
                                                 );
                                             })}
                                         </svg>
                                     </div>
                                 </div>
                             </div>
-
                         </div>
                     </div>
                 </div>
