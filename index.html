@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>日影制限シミュレーター | Building Shadow Check</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
+    <style>
+        body { background-color: #f8fafc; }
+        .slider { width: 100%; height: 8px; border-radius: 5px; background: #e2e8f0; outline: none; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo } = React;
+        const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceDot, AreaChart, Area } = Recharts;
+
+        const ShadowApp = () => {
+            // --- 入力パラメータ ---
+            const [h, setH] = useState(14); // 建物高さ
+            const [z, setZ] = useState(6.5); // 判定面高さ
+            const [d, setD] = useState(10); // 境界距離
+            const [limitHours, setLimitHours] = useState(3); // 規制時間
+            const lat = 35.7; // 緯度（東京）
+
+            // --- 太陽位置計算ロジック（冬至） ---
+            const calculateSunPos = (hour) => {
+                const delta = -23.44 * Math.PI / 180; // 冬至の赤緯
+                const phi = lat * Math.PI / 180;
+                const h_angle = (hour - 12) * 15 * Math.PI / 180;
+                
+                const sin_h = Math.sin(phi) * Math.sin(delta) + Math.cos(phi) * Math.cos(delta) * Math.cos(h_angle);
+                const alt = Math.asin(sin_h); // 太陽高度（ラジアン）
+                return alt;
+            };
+
+            // --- 特定の条件での日影時間を計算 ---
+            const getShadowDuration = (buildingH, boundaryD, planeZ) => {
+                const deltaH = buildingH - planeZ;
+                if (deltaH <= 0) return 0;
+
+                let count = 0;
+                const step = 0.1; // 0.1時間刻み
+                for (let t = 8; t <= 16; t += step) {
+                    const alt = calculateSunPos(t);
+                    if (alt > 0) {
+                        const shadowL = deltaH / Math.tan(alt);
+                        if (shadowL > boundaryD) count += step;
+                    }
+                }
+                return count;
+            };
+
+            // --- グラフデータの生成 (高さ vs 距離) ---
+            const chartData = useMemo(() => {
+                const data = [];
+                for (let dist = 1; dist <= 30; dist += 1) {
+                    let maxHeight = z;
+                    // 二分探索的に限界高さを探る
+                    for (let testH = z; testH <= 40; testH += 0.5) {
+                        if (getShadowDuration(testH, dist, z) <= limitHours) {
+                            maxHeight = testH;
+                        } else {
+                            break;
+                        }
+                    }
+                    data.push({ distance: dist, limitH: maxHeight });
+                }
+                return data;
+            }, [z, limitHours]);
+
+            const currentDuration = getShadowDuration(h, d, z);
+            const isOk = currentDuration <= limitHours;
+
+            return (
+                <div className="max-w-4xl mx-auto p-6 space-y-6">
+                    <header className="bg-slate-800 text-white p-4 rounded-xl shadow-lg">
+                        <h1 className="text-xl font-bold italic">Shadow Limit Simulator</h1>
+                        <p className="text-sm opacity-80">日影規制（冬至 8:00-16:00）判定アプリ</p>
+                    </header>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* UIパネル */}
+                        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-6">
+                            <div>
+                                <label className="block text-sm font-medium mb-2">建物高さ (H): {h}m</label>
+                                <input type="range" min="1" max="30" step="0.5" value={h} onChange={(e)=>setH(Number(e.target.value))} className="slider" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-2">判定面高さ (Z): {z}m</label>
+                                <input type="range" min="0" max="10" step="0.5" value={z} onChange={(e)=>setZ(Number(e.target.value))} className="slider" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-2">境界距離 (D): {d}m</label>
+                                <input type="range" min="1" max="25" step="0.5" value={d} onChange={(e)=>setD(Number(e.target.value))} className="slider" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-2">規制時間: {limitHours}h</label>
+                                <select className="w-full border p-2 rounded" value={limitHours} onChange={(e)=>setLimitHours(Number(e.target.value))}>
+                                    <option value={3}>3時間</option>
+                                    <option value={4}>4時間</option>
+                                    <option value={5}>5時間</option>
+                                </select>
+                            </div>
+
+                            <div className={`p-4 rounded-lg text-center font-bold text-lg ${isOk ? 'bg-green-100 text-green-700'
