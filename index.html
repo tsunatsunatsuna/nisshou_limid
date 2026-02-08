@@ -25,7 +25,7 @@
         const ShadowSimulator = () => {
             const [h, setH] = useState(14.0);
             const [z, setZ] = useState(6.5);
-            const [d, setD] = useState(10.0);
+            const [d, setD] = useState(5.0);
             const [limitHours, setLimitHours] = useState(3.0);
             const lat = 35.7;
 
@@ -41,17 +41,16 @@
                 const deltaH = targetH - targetZ;
                 if (deltaH <= 0) return 0;
                 let duration = 0;
-                for (let t = 8; t <= 16; t += 0.05) { // 精度を上げるため5分刻みで計算
+                for (let t = 8; t <= 16; t += 0.05) {
                     const alt = calculateSunAlt(t);
                     if (alt > 0 && (deltaH / Math.tan(alt)) > targetD) duration += 0.05;
                 }
                 return duration;
             };
 
-            // 10cm刻み(0.1m)で計算し曲線で描画
             const chartData = useMemo(() => {
                 const data = [];
-                for (let dist = 1; dist <= 30; dist += 1) {
+                for (let dist = 0; dist <= 30; dist += 1) {
                     let maxHeight = z;
                     for (let testH = z; testH <= 45; testH += 0.1) {
                         if (getShadowDuration(testH, dist, z) <= limitHours) {
@@ -65,6 +64,13 @@
 
             const currentDuration = getShadowDuration(h, d, z);
             const isOk = currentDuration <= limitHours;
+
+            // 断面図用計算
+            const sunLines = [
+                { time: "8:00", alt: calculateSunAlt(8) },
+                { time: "12:00", alt: calculateSunAlt(12) },
+                { time: "16:00", alt: calculateSunAlt(16) }
+            ];
 
             return (
                 <div className="min-h-screen p-4 md:p-8 flex justify-center text-slate-800">
@@ -104,7 +110,7 @@
                                                 <span className="font-bold">境界からの距離 (D)</span>
                                                 <span className="text-blue-600 font-black">{d.toFixed(1)}m</span>
                                             </div>
-                                            <input type="range" min="1" max="30" step="0.1" value={d} onChange={(e)=>setD(Number(e.target.value))} />
+                                            <input type="range" min="0" max="30" step="0.1" value={d} onChange={(e)=>setD(Number(e.target.value))} />
                                         </div>
 
                                         <div>
@@ -113,9 +119,6 @@
                                                 <span className="text-orange-600 font-black">{limitHours.toFixed(1)}時間</span>
                                             </div>
                                             <input type="range" min="2" max="5" step="0.5" value={limitHours} onChange={(e)=>setLimitHours(Number(e.target.value))} />
-                                            <div className="flex justify-between text-[10px] text-slate-400 mt-1 px-1">
-                                                <span>2.0h</span><span>3.0h</span><span>4.0h</span><span>5.0h</span>
-                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -136,7 +139,7 @@
                                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                                     <h3 className="text-sm font-bold text-slate-700 mb-6 flex items-center">
                                         <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
-                                        建物高さ × 境界距離 限界曲線 (10cm刻み計算)
+                                        建物高さ × 境界距離 限界曲線
                                     </h3>
                                     <div className="h-[300px] w-full">
                                         <ResponsiveContainer>
@@ -153,51 +156,73 @@
                                 </div>
 
                                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                                    <h3 className="text-sm font-bold text-slate-700 mb-4">📐 断面図 (単位:m)</h3>
+                                    <h3 className="text-sm font-bold text-slate-700 mb-4 tracking-wider flex items-center gap-2">
+                                        📐 断面図 (単位:m)
+                                    </h3>
                                     <div className="relative w-full aspect-[21/9] bg-slate-50 rounded-xl border border-slate-100 p-4">
-                                        <svg viewBox="0 -10 400 130" className="w-full h-full overflow-visible">
+                                        <svg viewBox="-50 -20 450 150" className="w-full h-full overflow-visible">
                                             {/* 目盛り: 高さ(Y軸) */}
                                             {[0, 10, 20, 30, 40].map(val => (
                                                 <g key={val}>
-                                                    <line x1="25" y1={100 - (val * 2.5)} x2="30" y2={100 - (val * 2.5)} stroke="#cbd5e1" />
-                                                    <text x="5" y={103 - (val * 2.5)} fontSize="8" fill="#94a3b8">{val}m</text>
+                                                    <line x1="-5" y1={100 - (val * 2.5)} x2="0" y2={100 - (val * 2.5)} stroke="#cbd5e1" />
+                                                    <text x="-30" y={103 - (val * 2.5)} fontSize="8" fill="#94a3b8">{val}m</text>
                                                 </g>
                                             ))}
                                             
                                             {/* 目盛り: 距離(X軸) */}
                                             {[0, 10, 20, 30, 40].map(val => (
                                                 <g key={val}>
-                                                    <line x1={30 + (val * 8)} y1="100" x2={30 + (val * 8)} y2="105" stroke="#cbd5e1" />
-                                                    <text x={25 + (val * 8)} y="115" fontSize="8" fill="#94a3b8">{val}m</text>
+                                                    <line x1={val * 8} y1="100" x2={val * 8} y2="105" stroke="#cbd5e1" />
+                                                    <text x={-5 + (val * 8)} y="115" fontSize="8" fill="#94a3b8">{val}m</text>
                                                 </g>
                                             ))}
 
                                             {/* 地面 */}
-                                            <line x1="30" y1="100" x2="400" y2="100" stroke="#64748b" strokeWidth="2" />
+                                            <line x1="-20" y1="100" x2="400" y2="100" stroke="#64748b" strokeWidth="2" />
                                             
+                                            {/* 影のグレー塗りつぶし (16:00の影を基準に最大範囲を描画) */}
+                                            {(() => {
+                                                const alt16 = calculateSunAlt(16);
+                                                const shadowMax = (h - z) / Math.tan(alt16);
+                                                return (
+                                                    <polygon 
+                                                        points={`0,${100 - (h * 2.5)} 0,${100 - (z * 2.5)} ${shadowMax * 8},${100 - (z * 2.5)}`} 
+                                                        fill="#e2e8f0" 
+                                                        opacity="0.8"
+                                                    />
+                                                );
+                                            })()}
+
                                             {/* 判定面 */}
-                                            <line x1="30" y1={100 - (z * 2.5)} x2="400" y2={100 - (z * 2.5)} stroke="#94a3b8" strokeDasharray="3 2" />
-                                            <text x="350" y={95 - (z * 2.5)} fontSize="8" fill="#94a3b8">Z={z}m</text>
+                                            <line x1="-20" y1={100 - (z * 2.5)} x2="400" y2={100 - (z * 2.5)} stroke="#94a3b8" strokeDasharray="3 2" />
+                                            <text x="350" y={95 - (z * 2.5)} fontSize="8" fill="#94a3b8">判定面 Z={z}m</text>
                                             
-                                            {/* 建物 */}
-                                            <rect x="30" y={100 - (h * 2.5)} width="20" height={h * 2.5} fill="#1e293b" />
-                                            <text x="30" y={90 - (h * 2.5)} fontSize="9" fontWeight="bold" fill="#1e293b">H={h}m</text>
+                                            {/* 建物 (右辺を 0m 地点に) */}
+                                            <rect x="-20" y={100 - (h * 2.5)} width="20" height={h * 2.5} fill="#1e293b" />
+                                            <text x="-20" y={90 - (h * 2.5)} fontSize="9" fontWeight="bold" fill="#1e293b">建物 H={h}m</text>
                                             
                                             {/* 境界線 */}
-                                            <line x1={30 + (d * 8)} y1="0" x2={30 + (d * 8)} y2="100" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="4 2" />
-                                            <text x={35 + (d * 8)} y="10" fontSize="9" fill="#ef4444" fontWeight="bold">D={d}m</text>
+                                            <line x1={d * 8} y1="-10" x2={d * 8} y2="100" stroke="#ef4444" strokeWidth="2" strokeDasharray="4 2" />
+                                            <text x={5 + (d * 8)} y="-5" fontSize="9" fill="#ef4444" fontWeight="bold">境界 D={d}m</text>
 
-                                            {/* 太陽光線 */}
-                                            {[9, 12, 15].map(t => {
-                                                const alt = calculateSunAlt(t);
-                                                const shadowL = (h - z) / Math.tan(alt);
+                                            {/* 太陽光線（斜辺） */}
+                                            {sunLines.map((sun, i) => {
+                                                const shadowL = (h - z) / Math.tan(sun.alt);
+                                                const xEnd = shadowL * 8;
+                                                const yEnd = 100 - (z * 2.5);
                                                 return (
-                                                    <line key={t} x1="40" y1={100 - (h * 2.5)} x2={40 + (shadowL * 8)} y2={100 - (z * 2.5)} 
-                                                          stroke="#f59e0b" strokeOpacity="0.3" strokeWidth="1" />
+                                                    <g key={sun.time}>
+                                                        <line x1="0" y1={100 - (h * 2.5)} x2={xEnd} y2={yEnd} 
+                                                              stroke="#f59e0b" strokeWidth="1.5" />
+                                                        <text x={xEnd + 2} y={yEnd - 2} fontSize="7" fill="#d97706" fontWeight="bold">
+                                                            {sun.time}の太陽光
+                                                        </text>
+                                                    </g>
                                                 );
                                             })}
                                         </svg>
                                     </div>
+                                    <p className="text-[10px] text-slate-400 mt-2 italic">※グレー部分は判定面(Z)より上に生じる影の範囲を示しています。</p>
                                 </div>
                             </div>
                         </div>
