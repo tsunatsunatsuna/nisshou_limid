@@ -3,74 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>日影制限シミュレーター | Building Shadow Check</title>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <title>日影制限シミュレーター</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
     <style>
-        body { background-color: #f8fafc; }
-        .slider { width: 100%; height: 8px; border-radius: 5px; background: #e2e8f0; outline: none; }
+        body { background-color: #f1f5f9; }
+        /* スライダーをスマホで操作しやすく */
+        input[type=range] { height: 2rem; width: 100%; cursor: pointer; }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useMemo } = React;
-        const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceDot, AreaChart, Area } = Recharts;
+        const { useState, useMemo, useEffect } = React;
+        const { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceDot } = Recharts;
 
-        const ShadowApp = () => {
-            // --- 入力パラメータ ---
+        const ShadowSimulator = () => {
+            // ステート管理
             const [h, setH] = useState(14); // 建物高さ
             const [z, setZ] = useState(6.5); // 判定面高さ
             const [d, setD] = useState(10); // 境界距離
-            const [limitHours, setLimitHours] = useState(3); // 規制時間
-            const lat = 35.7; // 緯度（東京）
+            const [limitHours, setLimitHours] = useState(3);
+            const lat = 35.7; // 東京の緯度
 
-            // --- 太陽位置計算ロジック（冬至） ---
-            const calculateSunPos = (hour) => {
-                const delta = -23.44 * Math.PI / 180; // 冬至の赤緯
+            // 太陽高度の計算 (冬至)
+            const calculateSunAlt = (hour) => {
+                const delta = -23.44 * Math.PI / 180; // 冬至赤緯
                 const phi = lat * Math.PI / 180;
                 const h_angle = (hour - 12) * 15 * Math.PI / 180;
-                
                 const sin_h = Math.sin(phi) * Math.sin(delta) + Math.cos(phi) * Math.cos(delta) * Math.cos(h_angle);
-                const alt = Math.asin(sin_h); // 太陽高度（ラジアン）
-                return alt;
+                return Math.asin(sin_h);
             };
 
-            // --- 特定の条件での日影時間を計算 ---
+            // 日影時間の計算
             const getShadowDuration = (buildingH, boundaryD, planeZ) => {
                 const deltaH = buildingH - planeZ;
                 if (deltaH <= 0) return 0;
-
-                let count = 0;
-                const step = 0.1; // 0.1時間刻み
+                let duration = 0;
+                const step = 0.1;
                 for (let t = 8; t <= 16; t += step) {
-                    const alt = calculateSunPos(t);
+                    const alt = calculateSunAlt(t);
                     if (alt > 0) {
                         const shadowL = deltaH / Math.tan(alt);
-                        if (shadowL > boundaryD) count += step;
+                        if (shadowL > boundaryD) duration += step;
                     }
                 }
-                return count;
+                return duration;
             };
 
-            // --- グラフデータの生成 (高さ vs 距離) ---
+            // グラフ用データの生成 (高さ×距離)
             const chartData = useMemo(() => {
                 const data = [];
-                for (let dist = 1; dist <= 30; dist += 1) {
+                for (let dist = 2; dist <= 30; dist += 2) {
                     let maxHeight = z;
-                    // 二分探索的に限界高さを探る
                     for (let testH = z; testH <= 40; testH += 0.5) {
                         if (getShadowDuration(testH, dist, z) <= limitHours) {
                             maxHeight = testH;
-                        } else {
-                            break;
-                        }
+                        } else { break; }
                     }
-                    data.push({ distance: dist, limitH: maxHeight });
+                    data.push({ distance: dist, limitH: parseFloat(maxHeight.toFixed(1)) });
                 }
                 return data;
             }, [z, limitHours]);
@@ -79,34 +74,136 @@
             const isOk = currentDuration <= limitHours;
 
             return (
-                <div className="max-w-4xl mx-auto p-6 space-y-6">
-                    <header className="bg-slate-800 text-white p-4 rounded-xl shadow-lg">
-                        <h1 className="text-xl font-bold italic">Shadow Limit Simulator</h1>
-                        <p className="text-sm opacity-80">日影規制（冬至 8:00-16:00）判定アプリ</p>
-                    </header>
+                <div className="min-h-screen p-4 md:p-8">
+                    <div className="max-w-5xl mx-auto space-y-6">
+                        
+                        {/* ヘッダー */}
+                        <header className="bg-indigo-700 text-white p-6 rounded-2xl shadow-md">
+                            <h1 className="text-2xl font-bold uppercase tracking-wider">Building Shadow Sim</h1>
+                            <p className="text-sm opacity-90 mt-1">日影規制 遵守範囲シミュレーター</p>
+                        </header>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {/* UIパネル */}
-                        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-6">
-                            <div>
-                                <label className="block text-sm font-medium mb-2">建物高さ (H): {h}m</label>
-                                <input type="range" min="1" max="30" step="0.5" value={h} onChange={(e)=>setH(Number(e.target.value))} className="slider" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-2">判定面高さ (Z): {z}m</label>
-                                <input type="range" min="0" max="10" step="0.5" value={z} onChange={(e)=>setZ(Number(e.target.value))} className="slider" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-2">境界距離 (D): {d}m</label>
-                                <input type="range" min="1" max="25" step="0.5" value={d} onChange={(e)=>setD(Number(e.target.value))} className="slider" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-2">規制時間: {limitHours}h</label>
-                                <select className="w-full border p-2 rounded" value={limitHours} onChange={(e)=>setLimitHours(Number(e.target.value))}>
-                                    <option value={3}>3時間</option>
-                                    <option value={4}>4時間</option>
-                                    <option value={5}>5時間</option>
-                                </select>
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            
+                            {/* 左側：操作パネル (レスポンシブで上または左) */}
+                            <div className="lg:col-span-1 space-y-4">
+                                <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                                    <h2 className="text-lg font-bold mb-4 text-slate-700 border-b pb-2">設定パラメータ</h2>
+                                    
+                                    <div className="space-y-6">
+                                        <div>
+                                            <div className="flex justify-between mb-1">
+                                                <label className="text-sm font-semibold text-slate-600">建物高さ (H)</label>
+                                                <span className="text-indigo-600 font-bold">{h} m</span>
+                                            </div>
+                                            <input type="range" min="1" max="30" step="0.5" value={h} onChange={(e)=>setH(Number(e.target.value))} />
+                                        </div>
+
+                                        <div>
+                                            <div className="flex justify-between mb-1">
+                                                <label className="text-sm font-semibold text-slate-600">判定面高さ (Z)</label>
+                                                <span className="text-indigo-600 font-bold">{z} m</span>
+                                            </div>
+                                            <input type="range" min="0" max="10" step="0.5" value={z} onChange={(e)=>setZ(Number(e.target.value))} />
+                                        </div>
+
+                                        <div>
+                                            <div className="flex justify-between mb-1">
+                                                <label className="text-sm font-semibold text-slate-600">境界からの距離 (D)</label>
+                                                <span className="text-indigo-600 font-bold">{d} m</span>
+                                            </div>
+                                            <input type="range" min="1" max="25" step="0.5" value={d} onChange={(e)=>setD(Number(e.target.value))} />
+                                        </div>
+
+                                        <div>
+                                            <label className="text-sm font-semibold text-slate-600 block mb-2">規制時間</label>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {[3, 4, 5].map(val => (
+                                                    <button key={val} onClick={()=>setLimitHours(val)} 
+                                                        className={`py-2 rounded-lg text-sm font-bold transition ${limitHours === val ? 'bg-indigo-600 text-white shadow-inner' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                                                        {val}h
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                {/* 判定結果表示 */}
+                                <div className={`p-6 rounded-2xl text-center shadow-md transition-colors ${isOk ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
+                                    <div className="text-sm font-medium opacity-90">判定結果</div>
+                                    <div className="text-3xl font-black my-1">{isOk ? "適合 (OK)" : "不適合 (NG)"}</div>
+                                    <div className="text-sm">現在の日影時間: <span className="underline underline-offset-4 decoration-2">{currentDuration.toFixed(1)}時間</span></div>
+                                </div>
                             </div>
 
-                            <div className={`p-4 rounded-lg text-center font-bold text-lg ${isOk ? 'bg-green-100 text-green-700'
+                            {/* 右側：可視化エリア (レスポンシブで下または右) */}
+                            <div className="lg:col-span-2 space-y-6">
+                                
+                                {/* メイングラフ：高さ×距離 */}
+                                <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                                    <h3 className="text-sm font-bold text-slate-500 mb-6 flex items-center">
+                                        <span className="bg-indigo-100 text-indigo-600 p-1 px-2 rounded mr-2">可視化</span>
+                                        建物高さ × 境界距離 の限界線
+                                    </h3>
+                                    <div className="h-[300px] w-full">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                                <defs>
+                                                    <linearGradient id="colorLimit" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
+                                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                                                    </linearGradient>
+                                                </defs>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                                <XAxis dataKey="distance" label={{ value: '距離(m)', position: 'insideBottom', offset: -5 }} />
+                                                <YAxis domain={[0, 40]} label={{ value: '高さ(m)', angle: -90, position: 'insideLeft', offset: 10 }} />
+                                                <Tooltip formatter={(value) => [`限界高さ: ${value}m`, '']} />
+                                                <Area type="monotone" dataKey="limitH" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorLimit)" />
+                                                <ReferenceDot x={d} y={h} r={8} fill={isOk ? "#10b981" : "#ef4444"} stroke="#fff" strokeWidth={3} />
+                                            </AreaChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 mt-4 leading-relaxed text-center">
+                                        青いエリア：日影規制をクリアできる範囲 / ●：現在の設定値
+                                    </p>
+                                </section>
+
+                                {/* 断面図 */}
+                                <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                                    <h3 className="text-sm font-bold text-slate-500 mb-4 tracking-tighter uppercase">断面シミュレーション</h3>
+                                    <div className="relative w-full aspect-[21/9] bg-slate-50 rounded-xl border border-slate-100 overflow-hidden">
+                                        <svg viewBox="0 0 400 150" className="w-full h-full">
+                                            {/* 地面 */}
+                                            <line x1="0" y1="130" x2="400" y2="130" stroke="#cbd5e1" strokeWidth="2" />
+                                            {/* 判定面 */}
+                                            <line x1="0" y1={130 - (z * 4)} x2="400" y2={130 - (z * 4)} stroke="#94a3b8" strokeDasharray="4 2" />
+                                            {/* 建物 */}
+                                            <rect x="40" y={130 - (h * 4)} width="30" height={h * 4} fill="#1e293b" rx="2" />
+                                            {/* 境界 */}
+                                            <line x1={40 + (d * 4)} y1="0" x2={40 + (d * 4)} y2="150" stroke="#fb7185" strokeWidth="2" strokeDasharray="4 4" />
+                                            {/* 日影の線（簡易） */}
+                                            {[9, 12, 15].map(time => {
+                                                const alt = calculateSunAlt(time);
+                                                const shadowL = (h - z) / Math.tan(alt);
+                                                return (
+                                                    <line key={time} x1="55" y1={130 - (h * 4)} x2={55 + (shadowL * 4)} y2={130 - (z * 4)} 
+                                                          stroke="#f59e0b" strokeOpacity="0.4" strokeWidth="1.5" />
+                                                );
+                                            })}
+                                        </svg>
+                                    </div>
+                                </section>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<ShadowSimulator />);
+    </script>
+</body>
+</html>
